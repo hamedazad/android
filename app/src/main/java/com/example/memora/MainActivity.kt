@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
                         token = receivedToken
                     }
                 } else {
-                    ChatScreen(token!!)
+                    ChatScreen(token!!, onLogout = { token = null })
                 }
             }
         }
