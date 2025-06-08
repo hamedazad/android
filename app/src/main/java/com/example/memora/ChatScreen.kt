@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 import retrofit2.Response
 
 @Composable
-fun ChatScreen(token: String) {
+fun ChatScreen(token: String, onLogout: () -> Unit) {
     var questionInput by remember { mutableStateOf("") }
     val chatHistory = remember { mutableStateListOf<String>() }
     var isLoading by remember { mutableStateOf(false) }
@@ -46,7 +46,12 @@ fun ChatScreen(token: String) {
             TopAppBar(
                 title = { Text("Memora") },
                 backgroundColor = Color(0xFF9C27B0),  // Purple header
-                contentColor = Color.White
+                contentColor = Color.White,
+                actions = {
+                    TextButton(onClick = onLogout) {
+                        Text("Logout", color = Color.White)
+                    }
+                }
             )
         }
     ) { padding ->
