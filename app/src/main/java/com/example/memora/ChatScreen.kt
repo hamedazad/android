@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
@@ -24,7 +26,7 @@ import retrofit2.Response
 @Composable
 fun ChatScreen(token: String) {
     var questionInput by remember { mutableStateOf("") }
-    var chatOutput by remember { mutableStateOf("") }
+    val chatHistory = remember { mutableStateListOf<String>() }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -90,11 +92,12 @@ fun ChatScreen(token: String) {
                         coroutineScope.launch {
                             isLoading = true
                             error = null
+                            chatHistory.add("You: ${questionInput}")
                             sendMessage(questionInput, token) { response, exception ->
                                 if (exception != null) {
                                     error = "Error: ${exception.localizedMessage}"
                                 } else if (response != null) {
-                                    chatOutput = response.reply
+                                    chatHistory.add("Memora: ${response.reply}")
                                     questionInput = "" // ✅ Clear input
                                 } else {
                                     error = "Unknown error occurred."
@@ -137,27 +140,37 @@ fun ChatScreen(token: String) {
                     )
                 }
 
-                // Output
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
-                } else if (error != null) {
+                }
+
+                if (error != null) {
                     Text(
                         text = error ?: "",
                         color = MaterialTheme.colors.error,
                         modifier = Modifier.padding(top = 16.dp)
                     )
-                } else if (chatOutput.isNotEmpty()) {
-                    Card(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp)
-                    ) {
-                        Text(
-                            text = chatOutput,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                        .weight(1f, fill = false)
+                ) {
+                    items(chatHistory) { message ->
+                        Card(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = message,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
                     }
                 }
             }
