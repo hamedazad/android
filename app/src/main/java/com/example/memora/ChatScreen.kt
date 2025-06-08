@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -24,7 +25,7 @@ import kotlinx.coroutines.launch
 import retrofit2.Response
 
 @Composable
-fun ChatScreen(token: String) {
+fun ChatScreen(token: String, onLogout: () -> Unit) {
     var questionInput by remember { mutableStateOf("") }
     val chatHistory = remember { mutableStateListOf<String>() }
     var isLoading by remember { mutableStateOf(false) }
@@ -43,11 +44,11 @@ fun ChatScreen(token: String) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Memora") },
-                backgroundColor = Color(0xFF9C27B0),  // Purple header
-                contentColor = Color.White
-            )
+        TopAppBar(
+            title = { Text("Memora") },
+            backgroundColor = Color(0xFF9C27B0),  // Purple header
+            contentColor = Color.White,
+        )
         }
     ) { padding ->
         Box(
@@ -70,6 +71,20 @@ fun ChatScreen(token: String) {
                     fontSize = 20.sp,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
+
+                OutlinedButton(
+                    onClick = onLogout,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, Color(0xFF9C27B0)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF9C27B0)
+                    )
+                ) {
+                    Text("Logout")
+                }
 
                 // ✅ Outlined TextField for Question input
                 OutlinedTextField(
