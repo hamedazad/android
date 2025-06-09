@@ -1,11 +1,34 @@
-package com.example.memora.ui.theme
+package com.example.memoraapp
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+private val DarkColorPalette = darkColors(
+    primary = Color(0xFFBB86FC),
+    primaryVariant = Color(0xFF3700B3),
+    secondary = Color(0xFF03DAC6)
+)
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+private val LightColorPalette = lightColors(
+    primary = Color(0xFF6200EE),
+    primaryVariant = Color(0xFF3700B3),
+    secondary = Color(0xFF03DAC6)
+)
+
+@Composable
+fun MemoraTheme(content: @Composable () -> Unit) {
+    val colors = if (isSystemInDarkTheme()) {
+        DarkColorPalette
+    } else {
+        LightColorPalette
+    }
+
+    MaterialTheme(
+        colors = colors,
+        typography = Typography(),
+        shapes = Shapes(),
+        content = content
+    )
+}

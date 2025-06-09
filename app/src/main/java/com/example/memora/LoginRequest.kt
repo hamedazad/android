@@ -1,3 +1,4 @@
+// File: LoginRequest.kt
 package com.example.memoraapp
 
 data class LoginRequest(
