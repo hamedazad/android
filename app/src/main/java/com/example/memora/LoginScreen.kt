@@ -1,8 +1,10 @@
 package com.example.memoraapp
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,9 +15,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(onLoginSuccess: (String) -> Unit) {
-    // Hardcoded username and password for convenience
-    val username = "azad"
-    val password = "azad"
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -28,7 +29,6 @@ fun LoginScreen(onLoginSuccess: (String) -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Header / Logo
         Text(
             text = "Memora Login",
             fontSize = 28.sp,
@@ -36,59 +36,68 @@ fun LoginScreen(onLoginSuccess: (String) -> Unit) {
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
-        // Card-like container for login fields
         Card(
             shape = RoundedCornerShape(16.dp),
             elevation = 8.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = "Username",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = username,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
                 )
 
-                Text(
-                    text = "Password",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = password,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
                 )
 
                 Button(
                     onClick = {
+                        if (username.isBlank() || password.isBlank()) {
+                            error = "Please enter both username and password"
+                            return@Button
+                        }
+                        
                         isLoading = true
                         error = null
                         scope.launch {
                             try {
+                                Log.d("LoginScreen", "Attempting login for user: ${username.trim()}")
                                 val response = RetrofitClient.apiService.login(
                                     LoginRequest(username.trim(), password.trim())
                                 )
+                                Log.d("LoginScreen", "Login response code: ${response.code()}")
+                                
                                 if (response.isSuccessful) {
                                     val loginResponse = response.body()
-                                    if (!loginResponse?.token.isNullOrEmpty()) {
-                                        onLoginSuccess(loginResponse!!.token)
+                                    Log.d("LoginScreen", "Login response body: $loginResponse")
+                                    
+                                    if (loginResponse != null) {
+                                        Log.d("LoginScreen", "Login successful, token received")
+                                        onLoginSuccess(loginResponse.token)
                                     } else {
+                                        Log.e("LoginScreen", "Invalid login response: null response")
                                         error = "Invalid login response"
                                     }
                                 } else {
                                     val errorBody = response.errorBody()?.string()
-                                    error = "Error: ${response.code()} - ${errorBody ?: "Unknown error"}"
+                                    Log.e("LoginScreen", "Login failed: ${response.code()} - $errorBody")
+                                    error = "Login failed: ${response.code()}"
                                 }
                             } catch (e: Exception) {
-                                error = "Exception: ${e.localizedMessage}"
+                                Log.e("LoginScreen", "Login error", e)
+                                error = "Connection error: ${e.localizedMessage}"
                             } finally {
                                 isLoading = false
                             }
@@ -109,7 +118,7 @@ fun LoginScreen(onLoginSuccess: (String) -> Unit) {
 
         if (error != null) {
             Text(
-                "Error: $error",
+                text = error ?: "",
                 color = MaterialTheme.colors.error,
                 modifier = Modifier.padding(top = 16.dp)
             )

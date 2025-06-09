@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.example.memora.ui.theme.Typography
 
 private val DarkColorPalette = darkColors(
     primary = Color(0xFFBB86FC),
@@ -18,8 +19,11 @@ private val LightColorPalette = lightColors(
 )
 
 @Composable
-fun MemoraTheme(content: @Composable () -> Unit) {
-    val colors = if (isSystemInDarkTheme()) {
+fun MemoraTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colors = if (darkTheme) {
         DarkColorPalette
     } else {
         LightColorPalette
@@ -27,7 +31,7 @@ fun MemoraTheme(content: @Composable () -> Unit) {
 
     MaterialTheme(
         colors = colors,
-        typography = Typography(),
+        typography = Typography,
         shapes = Shapes(),
         content = content
     )

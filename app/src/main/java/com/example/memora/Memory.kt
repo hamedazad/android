@@ -1,6 +1,8 @@
 package com.example.memoraapp
 
 data class Memory(
-    val title: String,
-    val content: String
+    val id: String,
+    val content: String,
+    val timestamp: String,
+    val userId: String
 )

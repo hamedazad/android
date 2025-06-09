@@ -7,11 +7,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,14 +22,52 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import retrofit2.Response
+import java.text.SimpleDateFormat
+import java.util.*
+import com.example.memoraapp.RetrofitClient
+import com.example.memoraapp.Memory
+import com.example.memoraapp.MemoryRequest
+import androidx.compose.ui.platform.LocalContext
+import android.speech.tts.TextToSpeech
 
 @Composable
 fun ChatScreen(token: String, onLogout: () -> Unit) {
     var questionInput by remember { mutableStateOf("") }
-    var chatOutput by remember { mutableStateOf("") }
+    val chatHistory = remember { mutableStateListOf<String>() }
     var isLoading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var memories by remember { mutableStateOf<List<Memory>>(emptyList()) }
+    var showInputFor by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val scaffoldState = rememberScoroutineScope()
+    var latestResponse by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val tts = remember {
+        TextToSpeech(context, null)
+    }
+
+    fun loadMemories(authToken: String) {
+        coroutineScope.launch {
+            try {
+                isLoading = true
+                val response = RetrofitClient.apiService.getMemories("Token $authToken")
+                if (response.isSuccessful) {
+                    memories = response.body() ?: emptyList()
+                } else {
+                    scaffoldState.snackbarHostState.showSnackbar("Failed to load memories: ${response.code()}")
+                }
+            } catch (e: Exception) {
+                scaffoldState.snackbarHostState.showSnackbar("Error loading memories: ${e.localizedMessage}")
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(token) {
+        if (token.isNotEmpty()) {
+            loadMemories(token)
+        }
+    }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -43,15 +83,38 @@ fun ChatScreen(token: String, onLogout: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("Memora") },
-                backgroundColor = Color(0xFF9C27B0),  // Purple header
+                backgroundColor = Color(0xFF9C27B0),
                 contentColor = Color.White,
                 actions = {
+                    IconButton(onClick = { loadMemories(token) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh Memories")
+                    }
                     TextButton(onClick = onLogout) {
                         Text("Logout", color = Color.White)
                     }
                 }
             )
-        }
+        },
+        floatingActionButton = {
+            Column {
+                FloatingActionButton(
+                    onClick = { showInputFor = "remember" },
+                    backgroundColor = Color(0xFF9C27B0),
+                    contentColor = Color.White,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Remember")
+                }
+                FloatingActionButton(
+                    onClick = { showInputFor = "ask" },
+                    backgroundColor = Color(0xFF6200EE),
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Chat, contentDescription = "Ask")
+                }
+            }
+        },
+        scaffoldState = scaffoldState
     ) { padding ->
         Box(
             modifier = Modifier
@@ -74,95 +137,146 @@ fun ChatScreen(token: String, onLogout: () -> Unit) {
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // ✅ Outlined TextField for Question input
-                OutlinedTextField(
-                    value = questionInput,
-                    onValueChange = { questionInput = it },
-                    label = { Text("Remember or ask...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        focusedBorderColor = Color(0xFF6200EE),
-                        unfocusedBorderColor = Color(0xFF9C27B0),
-                        textColor = Color.Black
-                    )
-                )
-                Button(
-                    onClick = {
-                        if (questionInput.isBlank()) {
-                            error = "Give me something to remember!"
-                            return@Button
-                        }
-                        coroutineScope.launch {
-                            isLoading = true
-                            error = null
-                            sendMessage(questionInput, token) { response, exception ->
-                                if (exception != null) {
-                                    error = "Error: ${exception.localizedMessage}"
-                                } else if (response != null) {
-                                    chatOutput = response.reply
-                                    questionInput = "" // ✅ Clear input
-                                } else {
-                                    error = "Unknown error occurred."
+                if (showInputFor != null) {
+                    OutlinedTextField(
+                        value = questionInput,
+                        onValueChange = { questionInput = it },
+                        label = { Text(if (showInputFor == "remember") "What do you want to remember?" else "What do you want to ask?") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = Color(0xFF6200EE),
+                            unfocusedBorderColor = Color(0xFF9C27B0),
+                            textColor = Color.Black
+                        ),
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (questionInput.isBlank()) {
+                                        coroutineScope.launch {
+                                            scaffoldState.snackbarHostState.showSnackbar("Please enter something!")
+                                        }
+                                        return@IconButton
+                                    }
+                                    coroutineScope.launch {
+                                        isLoading = true
+                                        // Handle saving memory or asking question
+                                        if (showInputFor == "remember") {
+                                            try {
+                                                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                                                val memoryRequest = MemoryRequest(content = questionInput, timestamp = timestamp)
+                                                val authHeader = "Token $token"
+                                                val response = RetrofitClient.apiService.saveMemory(memoryRequest, authHeader)
+
+                                                if (response.isSuccessful) {
+                                                    latestResponse = "Got it!"
+                                                } else {
+                                                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                                                    coroutineScope.launch {
+                                                        scaffoldState.snackbarHostState.showSnackbar("Error saving memory: ${response.code()} - $errorBody")
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                coroutineScope.launch {
+                                                    scaffoldState.snackbarHostState.showSnackbar("Exception saving memory: ${e.localizedMessage}")
+                                                }
+                                            }
+                                            questionInput = ""
+                                            showInputFor = null
+                                            isLoading = false
+                                        } else { // showInputFor == "ask"
+                                            sendMessage(questionInput, token) { response, exception ->
+                                                if (exception != null) {
+                                                    coroutineScope.launch {
+                                                        scaffoldState.snackbarHostState.showSnackbar("Error asking question: ${exception.localizedMessage}")
+                                                    }
+                                                } else if (response != null) {
+                                                    latestResponse = response.reply
+                                                } else {
+                                                    coroutineScope.launch {
+                                                        scaffoldState.snackbarHostState.showSnackbar("Unknown error occurred while asking question.")
+                                                    }
+                                                }
+                                                questionInput = ""
+                                                showInputFor = null
+                                                isLoading = false
+                                            }
+                                        }
+                                    }
                                 }
-                                isLoading = false
+                            ) {
+                                Icon(Icons.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colors.primary)
                             }
                         }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(top = 8.dp)
-                ) {
-                    Text("Memora")
-                }
-
-
-
-
-                // ✅ Mic button
-                IconButton(
-                    onClick = {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(
-                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                            )
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                        }
-                        speechRecognizerLauncher.launch(intent)
-                    },
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .size(48.dp)
-                        .background(Color(0xFF9C27B0), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Mic,
-                        contentDescription = "Speak",
-                        tint = Color.White
                     )
+
+                    IconButton(
+                        onClick = {
+                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                            }
+                            speechRecognizerLauncher.launch(intent)
+                        },
+                        modifier = Modifier
+                            .padding(top = 16.dp)
+                            .size(48.dp)
+                            .background(Color(0xFF9C27B0), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Mic,
+                            contentDescription = "Speak",
+                            tint = Color.White
+                        )
+                    }
                 }
 
-                // Output
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
-                } else if (error != null) {
-                    Text(
-                        text = error ?: "",
-                        color = MaterialTheme.colors.error,
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
-                } else if (chatOutput.isNotEmpty()) {
-                    Card(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp)
-                    ) {
-                        Text(
-                            text = chatOutput,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                        .weight(1f, fill = false)
+                ) {
+                    items(memories) { memory ->
+                        Card(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = memory.content,
+                                    style = MaterialTheme.typography.body1
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = memory.timestamp,
+                                    style = MaterialTheme.typography.caption,
+                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                    items(chatHistory) { message ->
+                        Card(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = message,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
                     }
                 }
             }
